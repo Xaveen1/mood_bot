@@ -141,7 +141,7 @@ def _build_data_summary(name: str, week: dict, plans: dict,
 
 async def _call_claude(data: str) -> str:
     """Вызов Claude API."""
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=30, read=45)) as client:
         resp = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={"Content-Type": "application/json"},

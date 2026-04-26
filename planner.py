@@ -130,6 +130,7 @@ async def _back_to_menu(q, ctx):
 
 async def _back_to_menu_msg(q, ctx):
     # Используется когда уже показали сообщение
+    await q.answer()
     return P_SUBJ
 
 
