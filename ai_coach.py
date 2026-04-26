@@ -189,17 +189,31 @@ def _build_data_summary(name: str, week: dict, plans: dict,
 
 
 async def _call_claude(data: str) -> str:
-    api_key = os.getenv("GEMINI_API_KEY", "")
+    """Вызов Claude API."""
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["x-api-key"] = api_key
+
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}",
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
             json={
-                "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-                "contents": [{"parts": [{"text": data}]}]
+                "model": "claude-sonnet-4-20250514",
+                "max_tokens": 1000,
+                "system": SYSTEM_PROMPT,
+                "messages": [
+                    {"role": "user",
+                     "content": f"Вот данные студента за последнюю неделю:\n\n{data}\n\n"
+                                f"Сделай анализ и дай конкретные советы на следующую неделю."}
+                ]
             }
         )
         result = resp.json()
-        return result["candidates"][0]["content"]["parts"][0]["text"]
+        if "error" in result:
+            raise Exception(result["error"].get("message", "API error"))
+        return result["content"][0]["text"]
 
 
 def _fallback_advice(week: dict, plans: dict) -> str:

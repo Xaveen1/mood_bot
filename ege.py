@@ -81,6 +81,11 @@ def _days_kb(sel: set):
 
 async def setup_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data["_es"] = set()
+    ctx.user_data["_es_list"] = []
+    ctx.user_data["_es_mode"] = None
+    ctx.user_data["_es_days_sel"] = set()
+    ctx.user_data["_es_days_idx"] = 0
+    ctx.user_data["_es_schedule"] = {}
     await update.message.reply_text(
         "📚 *Настройка ЕГЭ*\n\n"
         "Шаг 1/3 — Какие предметы сдаёшь?\n"
@@ -94,7 +99,7 @@ async def setup_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def got_es_subj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     val = q.data.split(":")[1]
-    sel: set = ctx.user_data["_es"]
+    sel: set = ctx.user_data.setdefault("_es", set())
 
     if val == "done":
         if not sel:
@@ -158,7 +163,7 @@ async def _ask_days_for_subject(q, ctx):
 async def got_days_all(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     val = q.data.split(":")[1]
-    sel: set = ctx.user_data["_es_days_sel"]
+    sel: set = ctx.user_data.setdefault("_es_days_sel", set())
 
     if val == "done":
         if not sel:
@@ -182,7 +187,7 @@ async def got_days_all(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def got_days_each(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     val = q.data.split(":")[1]
-    sel: set = ctx.user_data["_es_days_sel"]
+    sel: set = ctx.user_data.setdefault("_es_days_sel", set())
 
     if val == "done":
         if not sel:
@@ -196,6 +201,7 @@ async def got_days_each(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             if subj not in ctx.user_data["_es_schedule"][day]:
                 ctx.user_data["_es_schedule"][day].append(subj)
         ctx.user_data["_es_days_idx"] += 1
+        ctx.user_data["_es_days_sel"] = set()  # сброс для следующего предмета
         return await _ask_days_for_subject(q, ctx)
 
     sel.discard(val) if val in sel else sel.add(val)
