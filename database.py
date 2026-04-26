@@ -130,8 +130,6 @@ def all_users() -> list[dict]:
 # ── entries ───────────────────────────────────────────────
 
 def save_morning(user_id: int, data: dict):
-    if not user_id:
-        return
     today = str(date.today())
     with sqlite3.connect(DB) as conn:
         c = conn.cursor()
@@ -147,12 +145,9 @@ def save_morning(user_id: int, data: dict):
                          VALUES (?,?,?,?,?,?)""",
                       (user_id, today, data.get("sleep_min"), data.get("sleep_q"),
                        data.get("dreams"), data.get("phone_morning")))
-        conn.commit()
 
 
 def save_evening(user_id: int, data: dict):
-    if not user_id:
-        return
     today = str(date.today())
     with sqlite3.connect(DB) as conn:
         c = conn.cursor()
@@ -169,7 +164,6 @@ def save_evening(user_id: int, data: dict):
             ph = ", ".join(["?"] * (2 + len(fields)))
             c.execute(f"INSERT INTO entries ({cols}) VALUES ({ph})",
                       [user_id, today] + vals)
-        conn.commit()
 
 
 def get_week_stats(user_id: int) -> dict:
@@ -259,8 +253,6 @@ def get_week_stats(user_id: int) -> dict:
 
 def save_plan(user_id: int, subject: str, task_type: str,
               is_custom: int = 0, remind_at: str = None):
-    if not user_id or not subject:
-        return
     today = str(date.today())
     with sqlite3.connect(DB) as conn:
         c = conn.cursor()
@@ -270,12 +262,10 @@ def save_plan(user_id: int, subject: str, task_type: str,
             row = c.fetchone()
             if row:
                 c.execute("UPDATE plans SET task_type=?, done=0 WHERE id=?", (task_type, row[0]))
-                conn.commit()
                 return
         c.execute("""INSERT INTO plans (user_id, date, subject, task_type, is_custom, remind_at)
                      VALUES (?,?,?,?,?,?)""",
                   (user_id, today, subject, task_type, is_custom, remind_at))
-        conn.commit()
 
 
 def get_today_plans(user_id: int) -> list[dict]:
@@ -310,8 +300,6 @@ def get_week_plan_stats(user_id: int) -> dict:
 # ── EGE ───────────────────────────────────────────────────
 
 def save_ege_settings(user_id: int, subjects: list, schedule: dict):
-    if not user_id or not subjects:
-        return
     with sqlite3.connect(DB) as conn:
         c = conn.cursor()
         c.execute("SELECT user_id FROM ege_settings WHERE user_id=?", (user_id,))
@@ -323,25 +311,19 @@ def save_ege_settings(user_id: int, subjects: list, schedule: dict):
             c.execute("INSERT INTO ege_settings (user_id, subjects, schedule) VALUES (?,?,?)",
                       (user_id, json.dumps(subjects, ensure_ascii=False),
                        json.dumps(schedule, ensure_ascii=False)))
-        conn.commit()
 
 
 def get_ege_settings(user_id: int) -> dict | None:
-    if not user_id:
-        return None
-    try:
-        with sqlite3.connect(DB) as conn:
-            c = conn.cursor()
-            c.execute("SELECT subjects, schedule FROM ege_settings WHERE user_id=?", (user_id,))
-            row = c.fetchone()
-            if not row:
-                return None
-            return {
-                "subjects": json.loads(row[0]),
-                "schedule": json.loads(row[1]),
-            }
-    except Exception:
-        return None
+    with sqlite3.connect(DB) as conn:
+        c = conn.cursor()
+        c.execute("SELECT subjects, schedule FROM ege_settings WHERE user_id=?", (user_id,))
+        row = c.fetchone()
+        if not row:
+            return None
+        return {
+            "subjects": json.loads(row[0]),
+            "schedule": json.loads(row[1]),
+        }
 
 
 def get_today_ege_subjects(user_id: int) -> list[str]:
@@ -355,20 +337,15 @@ def get_today_ege_subjects(user_id: int) -> list[str]:
 
 
 def save_ege_task(user_id: int, subject: str, task_type: str, task_number: int = None):
-    if not user_id or not subject:
-        return
     today = str(date.today())
     with sqlite3.connect(DB) as conn:
         c = conn.cursor()
         c.execute("""INSERT INTO ege_tasks (user_id, date, subject, task_type, task_number)
                      VALUES (?,?,?,?,?)""",
                   (user_id, today, subject, task_type, task_number))
-        conn.commit()
 
 
 def mark_ege_task_done(user_id: int, subject: str, task_number: int = None):
-    if not user_id or not subject:
-        return
     today = str(date.today())
     with sqlite3.connect(DB) as conn:
         c = conn.cursor()
@@ -383,7 +360,6 @@ def mark_ege_task_done(user_id: int, subject: str, task_number: int = None):
                          ON CONFLICT(user_id, subject, task_number)
                          DO UPDATE SET times_done=times_done+1, last_done=?""",
                       (user_id, subject, task_number, today, today))
-        conn.commit()
 
 
 def get_ege_progress(user_id: int, subject: str) -> dict:

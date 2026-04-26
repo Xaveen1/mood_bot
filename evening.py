@@ -6,7 +6,7 @@ from telegram.ext import (
 from database import get_uid, save_evening
 from keyboards import score_kb, yes_no_kb, ikb, main_kb
 
-MOOD, ENERGY, SPORT, WATER, HABITS, SOCIAL, NOTE = range(7)
+MOOD, ENERGY, SPORT, WATER, HABITS, SOCIAL, NOTE = range(10, 17)
 
 HABITS_LIST = [
     ("meditation", "🧘 Медитация"),
@@ -38,7 +38,7 @@ async def got_mood(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     ctx.user_data["mood"] = int(q.data.split(":")[1])
-    await update.message.reply_text(
+    await q.edit_message_text(
         "Уровень *энергии* весь день?\n1 🪫  2 😴  3 ⚡  4 🔋  5 🚀",
         parse_mode="Markdown",
         reply_markup=score_kb("nrg")
@@ -50,7 +50,7 @@ async def got_energy(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     ctx.user_data["energy"] = int(q.data.split(":")[1])
-    await update.message.reply_text(
+    await q.edit_message_text(
         "Был *спорт или прогулка*?",
         parse_mode="Markdown",
         reply_markup=yes_no_kb("sp:1", "sp:0", "Да 🏃", "Нет 🛋")
@@ -62,7 +62,7 @@ async def got_sport(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     ctx.user_data["sport"] = int(q.data.split(":")[1])
-    await update.message.reply_text(
+    await q.edit_message_text(
         "Сколько стаканов *воды* выпил?",
         parse_mode="Markdown",
         reply_markup=ikb([
@@ -78,7 +78,7 @@ async def got_water(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     ctx.user_data["water"] = int(q.data.split(":")[1])
     ctx.user_data["_habits"] = set()
-    await update.message.reply_text(
+    await q.edit_message_text(
         "Что выполнил сегодня?\n_Выбери всё подходящее → Готово_",
         parse_mode="Markdown",
         reply_markup=_habits_kb(set())
@@ -95,7 +95,7 @@ async def got_habits(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if val == "done":
         for k, _ in HABITS_LIST:
             ctx.user_data[k] = 1 if k in sel else 0
-        await update.message.reply_text(
+        await q.edit_message_text(
             "Было *живое общение* с людьми?",
             parse_mode="Markdown",
             reply_markup=yes_no_kb("soc:1", "soc:0", "Да 👥", "Нет 🏠")
@@ -111,7 +111,7 @@ async def got_social(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     ctx.user_data["social"] = int(q.data.split(":")[1])
-    await update.message.reply_text(
+    await q.edit_message_text(
         "Заметка о дне ✏️\n\n"
         "Напиши что угодно — или /skip чтобы пропустить.",
         parse_mode="Markdown"
@@ -179,5 +179,5 @@ evening_conv = ConversationHandler(
         ],
     },
     fallbacks=[CommandHandler("cancel", cancel)],
-    per_message=True,
+    per_message=False,
 )

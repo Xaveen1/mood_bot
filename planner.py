@@ -9,10 +9,13 @@ from keyboards import ikb, main_kb
 P_SUBJ, P_TYPE, P_CUSTOM_TEXT, P_CUSTOM_REMIND = range(20, 24)
 
 SUBJECTS = {
-    "python":  ("🐍 Python",  ["Теория", "Практика", "Проект", "Задачи"]),
-    "sport":   ("🏃 Спорт",   ["Тренировка", "Прогулка", "Растяжка"]),
-    "reading": ("📖 Чтение",  ["Художественное", "Нон-фикшн", "Учёба"]),
-    "other":   ("📌 Другое",  []),
+    "coding":   ("💻 Программирование", ["🆕 Новая тема (теория)", "⌨️ Практика/задачи", "🏗 Проект", "🐛 Дебаггинг", "🔍 Code review с AI"]),
+    "remnote":  ("🃏 RemNote карточки",  ["📖 Создать карточки", "🔁 Повторить старые", "🧠 Активное воспроизведение"]),
+    "notion":   ("📒 Notion",            ["📝 Конспект лекции", "🗂 Обновить базу знаний", "✅ Обновить план проекта"]),
+    "sport":    ("🏃 Спорт",             ["🏋️ Тренировка", "🚶 Прогулка", "🧘 Растяжка/восстановление"]),
+    "reading":  ("📖 Чтение",            ["💻 Тех. литература/документация", "📚 Нон-фикшн", "🎭 Художественное"]),
+    "english":  ("🇬🇧 Английский",        ["📄 Читал документацию", "🎧 Слушал/смотрел на англ.", "✍️ Практика письма"]),
+    "other":    ("📌 Другое",             []),
 }
 LABELS = {k: v[0] for k, v in SUBJECTS.items()}
 LABELS["custom"] = "📝 Своя задача"
@@ -43,11 +46,11 @@ async def plan_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def got_subj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()
     val = q.data.split(":")[1]
     sel: set = ctx.user_data["_ps"]
 
     if val == "custom":
+        await q.answer()
         await q.edit_message_text(
             "📝 *Своя задача*\n\nНапиши название задачи:",
             parse_mode="Markdown"
@@ -58,6 +61,7 @@ async def got_subj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if not sel and not ctx.user_data.get("_custom_tasks"):
             await q.answer("Выбери хотя бы одно направление!", show_alert=True)
             return P_SUBJ
+        await q.answer()
         ctx.user_data["_plist"] = list(sel)
         ctx.user_data["_pidx"] = 0
         if sel:
@@ -65,6 +69,7 @@ async def got_subj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else:
             return await _save_all(q, ctx)
 
+    await q.answer()
     sel.discard(val) if val in sel else sel.add(val)
     await q.edit_message_reply_markup(_subj_kb(sel))
     return P_SUBJ
@@ -87,9 +92,9 @@ async def got_custom_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def got_custom_remind(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    val = q.data.split(":")[1]
+    data = q.data
 
-    if val == "yes":
+    if data == "cr:yes":
         await q.edit_message_text(
             "В какое время напомнить?",
             reply_markup=ikb([
@@ -101,23 +106,24 @@ async def got_custom_remind(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return P_CUSTOM_REMIND
 
-    if val == "no":
+    if data == "cr:no":
         ctx.user_data["_custom_tasks"].append({
             "text": ctx.user_data["_current_custom"],
             "remind": None
         })
         return await _back_to_menu(q, ctx)
 
-    # Выбрано время
-    time_str = q.data.replace("ct:", "")
+    # Выбрано время (data starts with "ct:")
+    time_str = data[3:]  # срезаем "ct:" — корректно для "ct:09:00" → "09:00"
     ctx.user_data["_custom_tasks"].append({
         "text": ctx.user_data["_current_custom"],
         "remind": time_str
     })
     await q.edit_message_text(
-        f"✅ Задача добавлена с напоминанием в {time_str}"
+        f"✅ Задача добавлена с напоминанием в {time_str}\n\nДобавить ещё?",
+        reply_markup=_subj_kb(ctx.user_data.get("_ps", set()))
     )
-    return await _back_to_menu_msg(q, ctx)
+    return P_SUBJ
 
 
 async def _back_to_menu(q, ctx):
@@ -130,7 +136,6 @@ async def _back_to_menu(q, ctx):
 
 async def _back_to_menu_msg(q, ctx):
     # Используется когда уже показали сообщение
-    await q.answer()
     return P_SUBJ
 
 

@@ -129,5 +129,5 @@ morning_conv = ConversationHandler(
         PHONE:   [CallbackQueryHandler(got_phone,   pattern="^ph:")],
     },
     fallbacks=[CommandHandler("cancel", cancel)],
-    per_message=True,
+    per_message=False,
 )

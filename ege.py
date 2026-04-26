@@ -27,9 +27,9 @@ from database import (
 from keyboards import ikb, main_kb
 
 # Шаги настройки
-ES_SUBJ, ES_SCHED_MODE, ES_DAYS, ES_DAYS_SUBJ = range(4)
+ES_SUBJ, ES_SCHED_MODE, ES_DAYS, ES_DAYS_SUBJ = range(40, 44)
 # Шаги занятия
-ET_TYPE, ET_NUM = range(2)
+ET_TYPE, ET_NUM = range(50, 52)
 
 SUBJECTS_INFO = {
     "russian":     ("🇷🇺 Русский",     27),
@@ -93,7 +93,6 @@ async def setup_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def got_es_subj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()
     val = q.data.split(":")[1]
     sel: set = ctx.user_data["_es"]
 
@@ -101,8 +100,9 @@ async def got_es_subj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if not sel:
             await q.answer("Выбери хотя бы один предмет!", show_alert=True)
             return ES_SUBJ
+        await q.answer()
         ctx.user_data["_es_list"] = list(sel)
-        await update.edit_message_text(
+        await q.edit_message_text(
             "Шаг 2/3 — Как распределить дни?\n\n"
             "Выбери вариант:",
             reply_markup=ikb([
@@ -113,6 +113,7 @@ async def got_es_subj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return ES_SCHED_MODE
 
     sel.discard(val) if val in sel else sel.add(val)
+    await q.answer()
     await q.edit_message_reply_markup(_subjects_kb(sel))
     return ES_SUBJ
 
@@ -127,7 +128,7 @@ async def got_sched_mode(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data["_es_schedule"] = {}
 
     if mode == "all":
-        await update.edit_message_text(
+        await q.edit_message_text(
             "Шаг 3/3 — В какие дни будешь заниматься ЕГЭ?\n"
             "_Можно выбрать несколько_",
             parse_mode="Markdown",
@@ -156,7 +157,6 @@ async def _ask_days_for_subject(q, ctx):
 
 async def got_days_all(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()
     val = q.data.split(":")[1]
     sel: set = ctx.user_data["_es_days_sel"]
 
@@ -164,6 +164,7 @@ async def got_days_all(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if not sel:
             await q.answer("Выбери хотя бы один день!", show_alert=True)
             return ES_DAYS
+        await q.answer()
         # Одинаковые дни для всех предметов
         for subj in ctx.user_data["_es_list"]:
             for day in sel:
@@ -173,13 +174,13 @@ async def got_days_all(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await _finish_setup(q, ctx)
 
     sel.discard(val) if val in sel else sel.add(val)
+    await q.answer()
     await q.edit_message_reply_markup(_days_kb(sel))
     return ES_DAYS
 
 
 async def got_days_each(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()
     val = q.data.split(":")[1]
     sel: set = ctx.user_data["_es_days_sel"]
 
@@ -187,6 +188,7 @@ async def got_days_each(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if not sel:
             await q.answer("Выбери хотя бы один день!", show_alert=True)
             return ES_DAYS_SUBJ
+        await q.answer()
         idx = ctx.user_data["_es_days_idx"]
         subj = ctx.user_data["_es_list"][idx]
         for day in sel:
@@ -197,47 +199,32 @@ async def got_days_each(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await _ask_days_for_subject(q, ctx)
 
     sel.discard(val) if val in sel else sel.add(val)
+    await q.answer()
     await q.edit_message_reply_markup(_days_kb(sel))
     return ES_DAYS_SUBJ
 
 
 async def _finish_setup(q, ctx):
-    try:
-        uid = get_uid(q.from_user.id)
-        if not uid:
-            uid = get_uid(q.from_user.id)  # Второй вызов как fallback
-        if not uid:
-            await q.edit_message_text(
-                "❌ Ошибка: не удалось сохранить пользователя. Попробуй /start",
-                parse_mode="Markdown"
-            )
-            return ConversationHandler.END
-            
-        save_ege_settings(uid, ctx.user_data["_es_list"], ctx.user_data["_es_schedule"])
+    uid = get_uid(q.from_user.id)
+    save_ege_settings(uid, ctx.user_data["_es_list"], ctx.user_data["_es_schedule"])
 
-        subj_labels = [SUBJECTS_INFO[s][0] for s in ctx.user_data["_es_list"]]
-        schedule_lines = []
-        for day in DAYS_LIST:
-            subjs = ctx.user_data["_es_schedule"].get(day, [])
-            if subjs:
-                names = ", ".join(SUBJECTS_INFO[s][0] for s in subjs)
-                schedule_lines.append(f"{DAYS_RU[day]}: {names}")
+    subj_labels = [SUBJECTS_INFO[s][0] for s in ctx.user_data["_es_list"]]
+    schedule_lines = []
+    for day in DAYS_LIST:
+        subjs = ctx.user_data["_es_schedule"].get(day, [])
+        if subjs:
+            names = ", ".join(SUBJECTS_INFO[s][0] for s in subjs)
+            schedule_lines.append(f"{DAYS_RU[day]}: {names}")
 
-        await q.edit_message_text(
-            "✅ *Расписание ЕГЭ сохранено!*\n\n"
-            f"Предметы: {', '.join(subj_labels)}\n\n"
-            "*Расписание:*\n" + "\n".join(schedule_lines) + "\n\n"
-            "_Теперь каждый день в разделе 📚 ЕГЭ будут появляться задания по расписанию._\n"
-            "_Можно изменить в любой момент через /ege\\_setup_",
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        try:
-            await q.edit_message_text(f"⚠️ Ошибка сохранения: {str(e)[:100]}")
-        except:
-            pass
-    finally:
-        ctx.user_data.clear()
+    await q.edit_message_text(
+        "✅ *Расписание ЕГЭ сохранено!*\n\n"
+        f"Предметы: {', '.join(subj_labels)}\n\n"
+        "*Расписание:*\n" + "\n".join(schedule_lines) + "\n\n"
+        "_Теперь каждый день в разделе 📚 ЕГЭ будут появляться задания по расписанию._\n"
+        "_Можно изменить в любой момент через /ege\\_setup_",
+        parse_mode="Markdown"
+    )
+    ctx.user_data.clear()
     return ConversationHandler.END
 
 
@@ -250,7 +237,7 @@ setup_conv = ConversationHandler(
         ES_DAYS_SUBJ: [CallbackQueryHandler(got_days_each,  pattern="^ed:")],
     },
     fallbacks=[CommandHandler("cancel", lambda u, c: ConversationHandler.END)],
-    per_message=True,
+    per_message=False,
 )
 
 
@@ -318,53 +305,36 @@ async def ege_today(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def ege_pick_subject(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    try:
-        q = update.callback_query
-        await q.answer()
-        subj = q.data.split(":")[1]
-        if subj not in SUBJECTS_INFO:
-            await q.answer("❌ Неизвестный предмет", show_alert=True)
-            return ConversationHandler.END
-        ctx.user_data["_ege_subj"] = subj
-        lbl = SUBJECTS_INFO[subj][0]
+    q = update.callback_query
+    await q.answer()
+    subj = q.data.split(":")[1]
+    ctx.user_data["_ege_subj"] = subj
+    lbl = SUBJECTS_INFO[subj][0]
 
-        rows = [[(tl, f"et:{tk}")] for tk, tl in TASK_TYPES]
-        await q.edit_message_text(
-            f"*{lbl}*\n\nКакой тип задач сегодня?",
-            parse_mode="Markdown",
-            reply_markup=ikb(rows)
-        )
-    except Exception as e:
-        try:
-            await q.answer(f"⚠️ Ошибка: {str(e)[:50]}", show_alert=True)
-        except:
-            pass
-        return ConversationHandler.END
+    rows = [[(tl, f"et:{tk}")] for tk, tl in TASK_TYPES]
+    await q.edit_message_text(
+        f"*{lbl}*\n\nКакой тип задач сегодня?",
+        parse_mode="Markdown",
+        reply_markup=ikb(rows)
+    )
     return ET_TYPE
 
 
 async def got_task_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    try:
-        q = update.callback_query
-        await q.answer()
-        task_type = q.data.split(":")[1]
-        ctx.user_data["_ege_type"] = task_type
-        subj = ctx.user_data.get("_ege_subj")
-        if not subj:
-            await q.answer("⚠️ Сессия потеряна. Начни снова.", show_alert=True)
-            return ConversationHandler.END
-        lbl = SUBJECTS_INFO.get(subj, {"0": "Неизвестный предмет"})[0]
+    q = update.callback_query
+    await q.answer()
+    task_type = q.data.split(":")[1]
+    ctx.user_data["_ege_type"] = task_type
+    subj = ctx.user_data["_ege_subj"]
+    lbl = SUBJECTS_INFO[subj][0]
 
-        if task_type == "new":
-            uid = get_uid(q.from_user.id)
-            if not uid:
-                await q.answer("⚠️ Ошибка: пользователь не найден", show_alert=True)
-                return ConversationHandler.END
-            progress = get_ege_progress(uid, subj)
+    if task_type == "new":
+        uid = get_uid(q.from_user.id)
+        progress = get_ege_progress(uid, subj)
         done_nums = set(progress.keys())
         max_num = SUBJECTS_INFO[subj][1]
 
-        await update.edit_message_text(
+        await q.edit_message_text(
             f"*{lbl}* — Новые задания\n\n"
             f"Выбери номер задания (✅ = уже делал раньше):\n"
             f"Всего заданий: {max_num}",
@@ -375,9 +345,6 @@ async def got_task_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     else:
         # Не новые — сохраняем сразу
         uid = get_uid(q.from_user.id)
-        if not uid:
-            await q.answer("⚠️ Ошибка: пользователь не найден", show_alert=True)
-            return ConversationHandler.END
         type_names = dict(TASK_TYPES)
         save_ege_task(uid, subj, task_type)
 
@@ -396,78 +363,51 @@ async def got_task_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         ctx.user_data.clear()
         return ConversationHandler.END
-    except Exception as e:
-        try:
-            await q.answer(f"⚠️ Ошибка: {str(e)[:50]}", show_alert=True)
-        except:
-            pass
-        return ConversationHandler.END
 
 
 async def got_task_num(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    try:
-        q = update.callback_query
-        await q.answer()
-        val = q.data.split(":")[1]
+    q = update.callback_query
+    await q.answer()
+    val = q.data.split(":")[1]
 
-        if val == "back":
-            subj = ctx.user_data.get("_ege_subj")
-            if not subj:
-                await q.answer("⚠️ Сессия потеряна", show_alert=True)
-                return ConversationHandler.END
-            lbl = SUBJECTS_INFO.get(subj, {"0": "Неизвестный"})[0]
-            rows = [[(tl, f"et:{tk}")] for tk, tl in TASK_TYPES]
-            await q.edit_message_text(
-                f"*{lbl}*\n\nКакой тип задач сегодня?",
-                parse_mode="Markdown",
-                reply_markup=ikb(rows)
-            )
-            return ET_TYPE
-
-        try:
-            num = int(val)
-        except ValueError:
-            await q.answer("⚠️ Ошибка: неверный номер задания", show_alert=True)
-            return ET_NUM
-            
-        subj = ctx.user_data.get("_ege_subj")
-        if not subj:
-            await q.answer("⚠️ Сессия потеряна", show_alert=True)
-            return ConversationHandler.END
-        lbl = SUBJECTS_INFO.get(subj, {"0": "Неизвестный"})[0]
-        uid = get_uid(q.from_user.id)
-        if not uid:
-            await q.answer("⚠️ Ошибка: пользователь не найден", show_alert=True)
-            return ConversationHandler.END
-
-        save_ege_task(uid, subj, "new", num)
-        mark_ege_task_done(uid, subj, num)
-
-        progress = get_ege_progress(uid, subj)
-        times = progress.get(num, {}).get("times", 1)
-
-        tip = ""
-        if times == 1:
-            tip = "\n\n💡 Первый раз — просто разберись, не торопись."
-        elif times == 2:
-            tip = "\n\n💡 Второй раз — попробуй решить самостоятельно до подсказок."
-        elif times >= 3:
-            tip = f"\n\n🔥 Ты уже делал это задание {times} раз — отличное повторение!"
-
+    if val == "back":
+        subj = ctx.user_data["_ege_subj"]
+        lbl = SUBJECTS_INFO[subj][0]
+        rows = [[(tl, f"et:{tk}")] for tk, tl in TASK_TYPES]
         await q.edit_message_text(
-            f"✅ *Записал задание №{num}*\n"
-            f"Предмет: {lbl}{tip}\n\n"
-            f"_Используй метод активного запоминания: реши, затем закрой и воспроизведи по памяти._",
-            parse_mode="Markdown"
+            f"*{lbl}*\n\nКакой тип задач сегодня?",
+            parse_mode="Markdown",
+            reply_markup=ikb(rows)
         )
-        ctx.user_data.clear()
-        return ConversationHandler.END
-    except Exception as e:
-        try:
-            await q.answer(f"⚠️ Ошибка: {str(e)[:50]}", show_alert=True)
-        except:
-            pass
-        return ConversationHandler.END
+        return ET_TYPE
+
+    num = int(val)
+    subj = ctx.user_data["_ege_subj"]
+    lbl = SUBJECTS_INFO[subj][0]
+    uid = get_uid(q.from_user.id)
+
+    save_ege_task(uid, subj, "new", num)
+    mark_ege_task_done(uid, subj, num)
+
+    progress = get_ege_progress(uid, subj)
+    times = progress.get(num, {}).get("times", 1)
+
+    tip = ""
+    if times == 1:
+        tip = "\n\n💡 Первый раз — просто разберись, не торопись."
+    elif times == 2:
+        tip = "\n\n💡 Второй раз — попробуй решить самостоятельно до подсказок."
+    elif times >= 3:
+        tip = f"\n\n🔥 Ты уже делал это задание {times} раз — отличное повторение!"
+
+    await q.edit_message_text(
+        f"✅ *Записал задание №{num}*\n"
+        f"Предмет: {lbl}{tip}\n\n"
+        f"_Используй метод активного запоминания: реши, затем закрой и воспроизведи по памяти._",
+        parse_mode="Markdown"
+    )
+    ctx.user_data.clear()
+    return ConversationHandler.END
 
 
 ege_session_conv = ConversationHandler(
@@ -479,7 +419,7 @@ ege_session_conv = ConversationHandler(
         ET_NUM:  [CallbackQueryHandler(got_task_num,  pattern="^en:")],
     },
     fallbacks=[CommandHandler("cancel", lambda u, c: ConversationHandler.END)],
-    per_message=True,
+    per_message=False,
 )
 
 

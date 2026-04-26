@@ -40,6 +40,7 @@ from ege import ege_today, setup_conv, ege_session_conv, ege_progress_view
 from planner import plan_conv, done_start, toggle_done, today_view
 from report import report_command, send_weekly_to_all
 from ai_coach import ai_coach_handler
+from guide import guide_handler, remnote_handler, antiburn_handler
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -71,16 +72,23 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "*📖 Справка*\n\n"
-        "🌅 *Утренний опрос* — сон (с точностью до 15 мин), телефон\n"
+        "🌅 *Утренний опрос* — сон, телефон\n"
         "🌙 *Вечерний дневник* — настроение, энергия, привычки\n"
         "📚 *ЕГЭ* — занятие по расписанию, трекинг заданий\n"
-        "📋 *План на день* — задачи + свои + напоминания\n"
+        "📋 *План на день* — программирование, RemNote, Notion, спорт\n"
         "✅ *Отметить* — отметить выполненное\n"
         "📊 *Мой день* — план на сегодня\n"
         "📈 *Отчёт недели* — полная аналитика\n"
         "🤖 *AI-тренер* — персональные советы от Claude\n\n"
-        "*/ege\\_setup* — настроить предметы и расписание ЕГЭ\n"
-        "*/ege\\_progress* — прогресс по заданиям\n\n"
+        "*/ege\\_setup* — настроить предметы ЕГЭ\n"
+        "*/ege\\_progress* — прогресс по заданиям\n"
+        "*/guide* — методы обучения программированию\n"
+        "*/remnote* — как правильно использовать карточки\n"
+        "*/antiburn* — как не выгореть\n\n"
+        "*🤖 Чтобы AI-тренер заработал:*\n"
+        "Добавь в Railway Variables:\n"
+        "`ANTHROPIC\\_API\\_KEY=sk-ant-...`\n"
+        "Ключ получи на: console.anthropic.com\n\n"
         "*Автоматически (время Пермь):*\n"
         "• 07:30 → утреннее напоминание\n"
         "• 13:00, 14:30, 16:00 → дневные напоминания\n"
@@ -211,6 +219,9 @@ def main():
     app.add_handler(CommandHandler("help",         cmd_help))
     app.add_handler(CommandHandler("stats",        report_command))
     app.add_handler(CommandHandler("ege_progress", ege_progress_view))
+    app.add_handler(CommandHandler("guide",        guide_handler))
+    app.add_handler(CommandHandler("remnote",      remnote_handler))
+    app.add_handler(CommandHandler("antiburn",     antiburn_handler))
 
     # ── ConversationHandler-ы (порядок важен!) ────────────
     app.add_handler(morning_conv)

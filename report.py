@@ -25,11 +25,14 @@ EGE_LABELS = {
 }
 
 PLAN_LABELS = {
-    "python":  "🐍 Python",
-    "sport":   "🏃 Спорт",
-    "reading": "📖 Чтение",
-    "other":   "📌 Другое",
-    "custom":  "📝 Свои задачи",
+    "coding":   "💻 Программирование",
+    "remnote":  "🃏 RemNote карточки",
+    "notion":   "📒 Notion",
+    "sport":    "🏃 Спорт",
+    "reading":  "📖 Чтение",
+    "english":  "🇬🇧 Английский",
+    "other":    "📌 Другое",
+    "custom":   "📝 Свои задачи",
 }
 
 
