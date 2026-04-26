@@ -1,33 +1,42 @@
 """
 bot.py — точка входа.
 
-Запуск:  python bot.py
+Меню:
+  🌅 Утренний опрос    → morning_conv
+  🌙 Вечерний дневник  → evening_conv
+  📋 План на день      → plan_conv
+  ✅ Отметить выполнено → done_start
+  📊 Мой день          → today_view
+  📈 Отчёт за неделю   → report_command
 
-Что делает:
-  • Регистрирует все команды
-  • Планировщик (APScheduler):
-      - 07:00 → напоминание утром
-      - 22:00 → вечерний дневник
-      - Воскресенье 20:00 → недельный отчёт
-      - Рандомные напоминания в окне (по настройкам юзера)
+Автоматика (по МСК):
+  07:30  → напоминание утро
+  22:00  → напоминание вечер
+  Вс 20:00 → недельный отчёт
+  13:00 / 14:30 / 16:00 → дневные напоминания
 """
 
 import logging
 import os
 import random
-from datetime import datetime, time, timedelta
+from datetime import time
 
 from dotenv import load_dotenv
-
-from telegram import Update, BotCommand
+from telegram import Update
 from telegram.ext import (
-    Application, CommandHandler, ContextTypes
+    Application, CommandHandler, MessageHandler,
+    CallbackQueryHandler, ContextTypes, filters
 )
 
-from database import create_tables, get_or_create_user, get_all_user_tg_ids
-from handlers import morning_conv, evening_conv, notify_conv, stats_command, send_weekly_report
+from database import init_db, upsert_user, all_tg_ids
+from keyboards import main_kb
+from morning import morning_conv
+from evening import evening_conv
+from planner import (
+    plan_conv, done_start, toggle_done, today_view
+)
+from report import report_command, send_weekly_to_all
 
-# ── Логи ──────────────────────────────────────────────────
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     level=logging.INFO
@@ -36,37 +45,40 @@ log = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════
-# КОМАНДЫ
+# БАЗОВЫЕ КОМАНДЫ
 # ═══════════════════════════════════════════════════════════
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    get_or_create_user(user.id, user.username or "")
+    upsert_user(user.id, user.username or "", user.first_name or "")
     await update.message.reply_text(
-        f"Привет, {user.first_name}! 👋\n\n"
-        "Я твой личный дневник самочувствия.\n\n"
-        "*Команды:*\n"
-        "/morning — утренний опрос\n"
-        "/evening — вечерний дневник\n"
-        "/stats   — недельный отчёт\n"
-        "/notify  — настроить уведомления\n"
-        "/help    — справка",
-        parse_mode="Markdown"
+        f"Привет, *{user.first_name}*! 👋\n\n"
+        "Я твой личный дневник — слежу за самочувствием, "
+        "сном, привычками и задачами.\n\n"
+        "Каждое утро буду писать тебе сам 🌅\n"
+        "Каждое воскресенье — недельный отчёт 📊\n\n"
+        "Используй кнопки внизу 👇",
+        parse_mode="Markdown",
+        reply_markup=main_kb()
     )
 
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "*📖 Справка*\n\n"
-        "*/morning* — утренний опрос (сон, телефон)\n"
-        "*/evening* — вечерний (настроение, энергия, привычки)\n"
-        "*/stats*   — недельный отчёт прямо сейчас\n"
-        "*/notify*  — настроить время напоминаний\n\n"
-        "Фиксированные напоминания:\n"
-        "• 07:30 → утренний опрос\n"
-        "• 22:00 → вечерний дневник\n"
-        "• Воскресенье 20:00 → недельный отчёт",
-        parse_mode="Markdown"
+        "*📖 Как пользоваться*\n\n"
+        "🌅 *Утренний опрос* — сон, качество, телефон\n"
+        "🌙 *Вечерний дневник* — настроение, энергия, привычки\n"
+        "📋 *План на день* — выбрать задачи на сегодня\n"
+        "✅ *Отметить выполнено* — отметить что сделал\n"
+        "📊 *Мой день* — посмотреть план\n"
+        "📈 *Отчёт за неделю* — аналитика + инсайты\n\n"
+        "*Автоматически:*\n"
+        "• 07:30 → напоминание заполнить утро\n"
+        "• 13:00, 14:30, 16:00 → дневные напоминания\n"
+        "• 22:00 → напоминание вечернего дневника\n"
+        "• Каждое воскресенье 20:00 → недельный отчёт",
+        parse_mode="Markdown",
+        reply_markup=main_kb()
     )
 
 
@@ -74,55 +86,47 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ПЛАНИРОВЩИК — джобы
 # ═══════════════════════════════════════════════════════════
 
-async def job_morning_reminder(context: ContextTypes.DEFAULT_TYPE):
-    """07:30 — напоминание заполнить утренний опрос."""
-    for tg_id in get_all_user_tg_ids():
+async def job_morning(ctx: ContextTypes.DEFAULT_TYPE):
+    for tg_id in all_tg_ids():
         try:
-            await context.bot.send_message(
+            await ctx.bot.send_message(
                 tg_id,
-                "🌅 Доброе утро! Не забудь заполнить утренний дневник.\n/morning"
+                "🌅 *Доброе утро!*\n\n"
+                "Заполни утренний опрос — займёт 30 секунд 👇",
+                parse_mode="Markdown",
+                reply_markup=main_kb()
             )
         except Exception as e:
-            log.warning(f"Не смог отправить morning reminder {tg_id}: {e}")
+            log.warning(f"morning job {tg_id}: {e}")
 
 
-async def job_evening_reminder(context: ContextTypes.DEFAULT_TYPE):
-    """22:00 — напоминание заполнить вечерний дневник."""
-    for tg_id in get_all_user_tg_ids():
+async def job_evening(ctx: ContextTypes.DEFAULT_TYPE):
+    for tg_id in all_tg_ids():
         try:
-            await context.bot.send_message(
+            await ctx.bot.send_message(
                 tg_id,
-                "🌙 Время вечернего дневника! Как прошёл день?\n/evening"
+                "🌙 *Время подвести итог дня!*\n\n"
+                "Заполни вечерний дневник — займёт минуту 👇",
+                parse_mode="Markdown",
+                reply_markup=main_kb()
             )
         except Exception as e:
-            log.warning(f"Не смог отправить evening reminder {tg_id}: {e}")
+            log.warning(f"evening job {tg_id}: {e}")
 
 
-async def job_weekly_report(context: ContextTypes.DEFAULT_TYPE):
-    """Воскресенье 20:00 — недельный отчёт."""
-    for tg_id in get_all_user_tg_ids():
-        try:
-            await send_weekly_report(tg_id, context)
-        except Exception as e:
-            log.warning(f"Не смог отправить weekly report {tg_id}: {e}")
-
-
-async def job_random_reminder(context: ContextTypes.DEFAULT_TYPE):
-    """
-    Напоминание в дневное окно (по умолчанию 13:00–16:00).
-    Шлём один раз — планировщик вызывает эту джобу несколько раз в день.
-    """
-    messages = [
-        "👋 Как ты сейчас?",
-        "💧 Выпил воды?",
-        "🧘 Минутка осознанности — как дела?",
-        "📋 Не забудь вечером заполнить дневник!",
+async def job_random(ctx: ContextTypes.DEFAULT_TYPE):
+    msgs = [
+        "💧 Пил воду сегодня? Выпей стакан прямо сейчас!",
+        "📋 Как план на день — всё идёт по графику?",
+        "🧘 Минута осознанности: как ты сейчас себя чувствуешь?",
+        "🏃 Не забудь про активность сегодня — даже прогулка считается!",
+        "⚡ Уровень энергии как? Может, пора сделать перерыв?",
     ]
-    for tg_id in get_all_user_tg_ids():
+    for tg_id in all_tg_ids():
         try:
-            await context.bot.send_message(tg_id, random.choice(messages))
+            await ctx.bot.send_message(tg_id, random.choice(msgs))
         except Exception as e:
-            log.warning(f"Не смог отправить random reminder {tg_id}: {e}")
+            log.warning(f"random job {tg_id}: {e}")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -131,45 +135,50 @@ async def job_random_reminder(context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     load_dotenv()
-    create_tables()
+    init_db()
 
     token = os.getenv("TOKEN")
     if not token:
-        raise ValueError("Переменная TOKEN не найдена в .env")
+        raise ValueError("TOKEN не найден — добавь в Railway Variables: TOKEN=...")
 
     app = Application.builder().token(token).build()
 
-    # ── Регистрация хендлеров ──────────────────────────────
-    app.add_handler(CommandHandler("start",   start))
-    app.add_handler(CommandHandler("help",    help_command))
-    app.add_handler(CommandHandler("stats",   stats_command))
+    # ── Базовые команды ───────────────────────────────────
+    app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("help",  cmd_help))
+    app.add_handler(CommandHandler("stats", report_command))
+
+    # ── ConversationHandler-ы (порядок важен!) ────────────
     app.add_handler(morning_conv)
     app.add_handler(evening_conv)
-    app.add_handler(notify_conv)
+    app.add_handler(plan_conv)
+
+    # ── Кнопки главного меню ──────────────────────────────
+    app.add_handler(MessageHandler(
+        filters.Regex("^✅ Отметить выполнено$"), done_start))
+    app.add_handler(MessageHandler(
+        filters.Regex("^📊 Мой день$"), today_view))
+    app.add_handler(MessageHandler(
+        filters.Regex("^📈 Отчёт за неделю$"), report_command))
+
+    # ── Inline кнопки (отметка выполненного) ─────────────
+    app.add_handler(CallbackQueryHandler(toggle_done, pattern="^td:"))
 
     # ── Планировщик ───────────────────────────────────────
     jq = app.job_queue
 
-    # Утреннее напоминание — каждый день 07:30
-    jq.run_daily(job_morning_reminder, time=time(7, 30))
-
-    # Вечернее напоминание — каждый день 22:00
-    jq.run_daily(job_evening_reminder, time=time(22, 0))
-
-    # Недельный отчёт — каждое воскресенье 20:00
-    jq.run_daily(
-        job_weekly_report,
+    jq.run_daily(job_morning,  time=time(7, 30))   # 07:30 каждый день
+    jq.run_daily(job_evening,  time=time(22, 0))   # 22:00 каждый день
+    jq.run_daily(job_random,   time=time(13, 0))   # 13:00
+    jq.run_daily(job_random,   time=time(14, 30))  # 14:30
+    jq.run_daily(job_random,   time=time(16, 0))   # 16:00
+    jq.run_daily(                                  # вс 20:00 — недельный отчёт
+        send_weekly_to_all,
         time=time(20, 0),
-        days=(6,)  # 6 = воскресенье (0=пн … 6=вс)
+        days=(6,)
     )
 
-    # Дневные напоминания — 3 раза между 13:00 и 16:00
-    # Рандомизация: каждый день в разное время внутри окна
-    for offset_min in [0, 60, 120]:   # примерно каждый час
-        remind_time = time(13 + offset_min // 60, offset_min % 60)
-        jq.run_daily(job_random_reminder, time=remind_time)
-
-    log.info("Бот запущен ✅")
+    log.info("✅ Бот запущен")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
