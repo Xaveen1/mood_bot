@@ -2,3 +2,4 @@
 diary.db
 __pycache__/
 *.pyc
+*.pyo

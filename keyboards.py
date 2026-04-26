@@ -4,24 +4,16 @@ from telegram import (
 )
 
 
-# ══════════════════════════════════════════
-# ГЛАВНОЕ МЕНЮ (постоянные кнопки внизу)
-# ══════════════════════════════════════════
-
 def main_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup([
         ["🌅 Утренний опрос",  "🌙 Вечерний дневник"],
-        ["📋 План на день",    "✅ Отметить выполнено"],
-        ["📊 Мой день",        "📈 Отчёт за неделю"],
+        ["📚 ЕГЭ",             "📋 План на день"],
+        ["✅ Отметить",         "📊 Мой день"],
+        ["📈 Отчёт недели",    "🤖 AI-тренер"],
     ], resize_keyboard=True, one_time_keyboard=False)
 
 
-# ══════════════════════════════════════════
-# INLINE — вспомогалки
-# ══════════════════════════════════════════
-
 def ikb(rows: list[list[tuple]]) -> InlineKeyboardMarkup:
-    """ikb([[('Текст', 'data'), ...], ...])"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(t, callback_data=d) for t, d in row]
         for row in rows
@@ -29,7 +21,6 @@ def ikb(rows: list[list[tuple]]) -> InlineKeyboardMarkup:
 
 
 def score_kb(prefix: str) -> InlineKeyboardMarkup:
-    """Кнопки 1–5 с префиксом."""
     return ikb([[(str(i), f"{prefix}:{i}") for i in range(1, 6)]])
 
 

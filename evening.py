@@ -15,7 +15,7 @@ HABITS_LIST = [
 ]
 
 
-def _habits_kb(selected: set) -> object:
+def _habits_kb(selected: set):
     rows = [
         [("✅ " + lbl if k in selected else "☐ " + lbl, f"hab:{k}")]
         for k, lbl in HABITS_LIST
@@ -25,10 +25,9 @@ def _habits_kb(selected: set) -> object:
 
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    await msg.reply_text(
-        "🌙 *Вечерний дневник*\n\nКак твоё *настроение* сегодня?\n\n"
-        "1 😞  2 😕  3 😐  4 🙂  5 😄",
+    await update.message.reply_text(
+        "🌙 *Вечерний дневник*\n\n"
+        "Как *настроение* сегодня?\n1 😞  2 😕  3 😐  4 🙂  5 😄",
         parse_mode="Markdown",
         reply_markup=score_kb("mood")
     )
@@ -40,7 +39,7 @@ async def got_mood(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     ctx.user_data["mood"] = int(q.data.split(":")[1])
     await q.edit_message_text(
-        "Уровень *энергии* весь день?\n\n1 🪫  2 😴  3 ⚡  4 🔋  5 🚀",
+        "Уровень *энергии* весь день?\n1 🪫  2 😴  3 ⚡  4 🔋  5 🚀",
         parse_mode="Markdown",
         reply_markup=score_kb("nrg")
     )
@@ -52,7 +51,7 @@ async def got_energy(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     ctx.user_data["energy"] = int(q.data.split(":")[1])
     await q.edit_message_text(
-        "Был *спорт или прогулка* сегодня?",
+        "Был *спорт или прогулка*?",
         parse_mode="Markdown",
         reply_markup=yes_no_kb("sp:1", "sp:0", "Да 🏃", "Нет 🛋")
     )
@@ -80,7 +79,7 @@ async def got_water(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data["water"] = int(q.data.split(":")[1])
     ctx.user_data["_habits"] = set()
     await q.edit_message_text(
-        "Что выполнил сегодня?\n_Выбери всё подходящее, потом нажми Готово_",
+        "Что выполнил сегодня?\n_Выбери всё подходящее → Готово_",
         parse_mode="Markdown",
         reply_markup=_habits_kb(set())
     )
@@ -97,16 +96,13 @@ async def got_habits(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         for k, _ in HABITS_LIST:
             ctx.user_data[k] = 1 if k in sel else 0
         await q.edit_message_text(
-            "Было *живое общение* с людьми сегодня?",
+            "Было *живое общение* с людьми?",
             parse_mode="Markdown",
             reply_markup=yes_no_kb("soc:1", "soc:0", "Да 👥", "Нет 🏠")
         )
         return SOCIAL
 
-    if val in sel:
-        sel.discard(val)
-    else:
-        sel.add(val)
+    sel.discard(val) if val in sel else sel.add(val)
     await q.edit_message_reply_markup(_habits_kb(sel))
     return HABITS
 
@@ -116,9 +112,8 @@ async def got_social(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     ctx.user_data["social"] = int(q.data.split(":")[1])
     await q.edit_message_text(
-        "Последний вопрос — *заметка о дне* ✏️\n\n"
-        "Напиши что угодно: главное событие, мысль, ощущение.\n"
-        "Или нажми /skip чтобы пропустить.",
+        "Заметка о дне ✏️\n\n"
+        "Напиши что угодно — или /skip чтобы пропустить.",
         parse_mode="Markdown"
     )
     return NOTE
@@ -141,18 +136,19 @@ async def _finish(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data.pop("_habits", None)
     save_evening(uid, ctx.user_data)
 
-    mood = ctx.user_data.get("mood", "—")
-    energy = ctx.user_data.get("energy", "—")
+    mood = ctx.user_data.get("mood", 0)
+    energy = ctx.user_data.get("energy", 0)
     sport = "✅" if ctx.user_data.get("sport") else "❌"
     med = "✅" if ctx.user_data.get("meditation") else "❌"
     read = "✅" if ctx.user_data.get("reading") else "❌"
+    stars = lambda n: "⭐" * n + "☆" * (5 - n)
 
     await update.message.reply_text(
         f"🌙 *День записан!*\n\n"
-        f"😊 Настроение: {'⭐'*mood}\n"
-        f"⚡ Энергия: {'⭐'*energy}\n"
+        f"😊 Настроение: {stars(mood)}\n"
+        f"⚡ Энергия:    {stars(energy)}\n"
         f"🏃 Спорт: {sport}  🧘 Медитация: {med}  📚 Чтение: {read}\n\n"
-        f"До завтра! 🔥",
+        f"_Данные идут в аналитику — завтра будет видно динамику_ 📊",
         parse_mode="Markdown",
         reply_markup=main_kb()
     )
